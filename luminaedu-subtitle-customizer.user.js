@@ -7,8 +7,8 @@
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
 // @match         https://www.luminaedu.com/*
-// @icon          https://www.luminaedu.com/favicon.ico
-// @icon64        https://www.luminaedu.com/favicon.ico
+// @icon          https://www.luminaedu.com/lib/images/favicon.ico
+// @icon64        https://www.luminaedu.com/lib/images/favicon.ico
 // @homepage      https://github.com/sangyuxiaowu/luminaedu-video-subtitle
 // @homepageURL   https://github.com/sangyuxiaowu/luminaedu-video-subtitle
 // @supportURL    https://github.com/sangyuxiaowu/luminaedu-video-subtitle/issues
