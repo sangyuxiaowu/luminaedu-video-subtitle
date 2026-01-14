@@ -36,6 +36,18 @@
         enabled: true
     };
 
+    // 字幕选择器常量
+    const SUBTITLE_SELECTORS = [
+        '.video-subtitle',
+        '.subtitle',
+        '.caption',
+        '.vjs-text-track-display',
+        '.video-react .video-react-text-track-display',
+        '.plyr__captions',
+        '[class*="subtitle"]',
+        '[class*="caption"]'
+    ];
+
     // 获取配置
     function getConfig() {
         const savedConfig = GM_getValue('subtitleConfig', {});
@@ -64,16 +76,7 @@
         }
 
         // 常见的视频字幕选择器
-        const subtitleSelectors = [
-            '.video-subtitle',
-            '.subtitle',
-            '.caption',
-            '.vjs-text-track-display',
-            '.video-react .video-react-text-track-display',
-            '.plyr__captions',
-            '[class*="subtitle"]',
-            '[class*="caption"]'
-        ].join(', ');
+        const subtitleSelectors = SUBTITLE_SELECTORS.join(', ');
 
         styleElement.textContent = `
             ${subtitleSelectors} {
@@ -275,8 +278,7 @@
                     return nodes.some(node => {
                         if (node.nodeType === 1) { // Element node
                             return node.matches && (
-                                node.matches('.video-subtitle, .subtitle, .caption, .vjs-text-track-display, [class*="subtitle"], [class*="caption"]') ||
-                                node.querySelector('.video-subtitle, .subtitle, .caption, .vjs-text-track-display, [class*="subtitle"], [class*="caption"]')
+                                SUBTITLE_SELECTORS.some(selector => node.matches(selector) || node.querySelector(selector))
                             );
                         }
                         return false;

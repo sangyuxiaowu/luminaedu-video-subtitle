@@ -451,9 +451,9 @@
     <script>
         // 检测是否安装了用户脚本管理器
         window.addEventListener('load', function() {
-            const hasUserscriptManager = typeof GM_info !== 'undefined' || 
-                                        typeof GM !== 'undefined' ||
-                                        typeof unsafeWindow !== 'undefined';
+            // 使用更准确的检测方法
+            const hasUserscriptManager = (typeof GM_info !== 'undefined') || 
+                                        (typeof GM !== 'undefined' && typeof GM.info !== 'undefined');
             
             if (!hasUserscriptManager) {
                 console.log('未检测到用户脚本管理器');
