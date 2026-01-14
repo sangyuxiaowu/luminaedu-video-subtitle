@@ -2,7 +2,7 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.0.0
+// @version       4.0.1
 // @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
