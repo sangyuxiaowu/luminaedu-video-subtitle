@@ -19,7 +19,7 @@
 // @grant         GM_setValue
 // @grant         GM_deleteValue
 // @license       MIT
-// @copyright     2024, sangyuxiaowu
+// @copyright     2026, sangyuxiaowu
 // @run-at        document-end
 // @noframes
 // ==/UserScript==
