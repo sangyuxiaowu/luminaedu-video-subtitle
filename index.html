@@ -457,6 +457,31 @@
             
             if (!hasUserscriptManager) {
                 console.log('未检测到用户脚本管理器');
+                
+                // 在安装按钮上添加提示
+                const installBtn = document.querySelector('.btn-primary');
+                if (installBtn) {
+                    const originalHref = installBtn.getAttribute('href');
+                    installBtn.addEventListener('click', function(e) {
+                        // 检测是否为直接安装链接
+                        if (originalHref && originalHref.endsWith('.user.js')) {
+                            // Tampermonkey/Violentmonkey 会自动拦截 .user.js 文件
+                            // 如果没有安装，给用户提示
+                            setTimeout(function() {
+                                const notice = document.createElement('div');
+                                notice.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #ff9800; color: white; padding: 15px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10001; font-size: 16px;';
+                                notice.textContent = '⚠️ 请先安装 Tampermonkey 或 Violentmonkey 扩展！';
+                                document.body.appendChild(notice);
+                                
+                                setTimeout(function() {
+                                    notice.style.transition = 'opacity 0.5s';
+                                    notice.style.opacity = '0';
+                                    setTimeout(function() { notice.remove(); }, 500);
+                                }, 3000);
+                            }, 500);
+                        }
+                    });
+                }
             }
         });
     </script>

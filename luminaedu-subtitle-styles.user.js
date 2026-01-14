@@ -265,9 +265,30 @@
     function init() {
         applySubtitleStyles();
         
-        // 监听 DOM 变化，确保样式持续应用
+        // 使用防抖来优化性能，避免频繁应用样式
+        let debounceTimer = null;
         const observer = new MutationObserver(function(mutations) {
-            applySubtitleStyles();
+            // 检查是否有相关的字幕元素变化
+            const hasRelevantChanges = mutations.some(mutation => {
+                if (mutation.type === 'childList') {
+                    const nodes = Array.from(mutation.addedNodes);
+                    return nodes.some(node => {
+                        if (node.nodeType === 1) { // Element node
+                            return node.matches && (
+                                node.matches('.video-subtitle, .subtitle, .caption, .vjs-text-track-display, [class*="subtitle"], [class*="caption"]') ||
+                                node.querySelector('.video-subtitle, .subtitle, .caption, .vjs-text-track-display, [class*="subtitle"], [class*="caption"]')
+                            );
+                        }
+                        return false;
+                    });
+                }
+                return false;
+            });
+            
+            if (hasRelevantChanges) {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(applySubtitleStyles, 100);
+            }
         });
         
         observer.observe(document.body, {
