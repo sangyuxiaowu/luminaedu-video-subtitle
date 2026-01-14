@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="LuminaEdu 视频字幕样式自定义 - Tampermonkey/Violentmonkey 用户脚本">
+    <title>LuminaEdu 视频字幕样式自定义 - 安装页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: #667eea;
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+        }
+
+        .section p, .section li {
+            margin-bottom: 10px;
+            line-height: 1.8;
+        }
+
+        .section ul {
+            margin-left: 20px;
+            list-style: none;
+        }
+
+        .section ul li:before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .install-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 30px 0;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .steps {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 25px;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            flex-shrink: 0;
+            margin-right: 20px;
+        }
+
+        .step-content h3 {
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .step-content p {
+            color: #666;
+            margin: 0;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .feature-card h3 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .feature-card p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .screenshot {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+        }
+
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        .note strong {
+            color: #856404;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            margin: 0 5px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 30px 20px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 LuminaEdu 视频字幕样式自定义</h1>
+            <p>让视频字幕更符合你的观看习惯</p>
+            <div style="margin-top: 20px;">
+                <span class="badge">v1.0.0</span>
+                <span class="badge">MIT License</span>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>📝 简介</h2>
+                <p>
+                    这是一个用于自定义 LuminaEdu 平台视频字幕样式的用户脚本，支持 Tampermonkey 和 Violentmonkey 浏览器扩展。
+                    通过这个脚本，你可以轻松调整字幕的字体大小、颜色、背景、位置等多个属性，打造最适合自己的观看体验。
+                </p>
+            </div>
+
+            <div class="section">
+                <h2>✨ 功能特性</h2>
+                <div class="features">
+                    <div class="feature-card">
+                        <div class="feature-icon">🎨</div>
+                        <h3>样式自定义</h3>
+                        <p>自由调整字体大小、颜色、字体、背景色等</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📍</div>
+                        <h3>位置调整</h3>
+                        <p>支持顶部/底部显示，可调整偏移距离</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💾</div>
+                        <h3>配置保存</h3>
+                        <p>设置自动保存，下次访问时自动应用</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔄</div>
+                        <h3>实时生效</h3>
+                        <p>修改后立即生效，无需刷新页面</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🚀 快速安装</h2>
+                
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>安装浏览器扩展</h3>
+                            <p>首先需要安装 Tampermonkey 或 Violentmonkey 扩展：</p>
+                            <ul style="margin-top: 10px; margin-left: 20px;">
+                                <li>Chrome/Edge: 访问扩展商店搜索 "Tampermonkey" 或 "Violentmonkey"</li>
+                                <li>Firefox: 访问 Firefox Add-ons 搜索安装</li>
+                                <li>Safari: 从 App Store 下载 Userscripts 扩展</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>安装用户脚本</h3>
+                            <p>点击下方按钮安装脚本，或者手动复制脚本代码到扩展中：</p>
+                            <div class="install-buttons" style="margin-top: 15px;">
+                                <a href="luminaedu-subtitle-styles.user.js" class="btn btn-primary">
+                                    📥 一键安装脚本
+                                </a>
+                                <a href="https://github.com/sangyuxiaowu/luminaedu-video-subtitle" class="btn btn-secondary" target="_blank">
+                                    📄 查看源码
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>访问 LuminaEdu 并设置</h3>
+                            <p>访问 LuminaEdu 网站，在 Tampermonkey/Violentmonkey 菜单中找到"字幕样式设置"，即可打开设置面板进行个性化配置。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="note">
+                    <strong>💡 提示：</strong> 如果点击"一键安装"按钮后没有反应，请确保已经安装了 Tampermonkey 或 Violentmonkey 扩展。
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🎯 使用说明</h2>
+                <ul>
+                    <li>访问 LuminaEdu 网站后，脚本会自动应用默认的字幕样式</li>
+                    <li>点击浏览器工具栏的 Tampermonkey/Violentmonkey 图标</li>
+                    <li>在弹出菜单中选择"字幕样式设置"</li>
+                    <li>在设置面板中调整各项参数</li>
+                    <li>点击"保存"按钮应用设置，字幕样式会立即更新</li>
+                    <li>如需恢复默认设置，点击"恢复默认"按钮</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>⚙️ 配置项说明</h2>
+                <ul>
+                    <li><strong>启用自定义样式：</strong>勾选后才会应用自定义样式</li>
+                    <li><strong>字体大小：</strong>可使用 px、em、% 等单位，如 <code>24px</code></li>
+                    <li><strong>字体颜色：</strong>支持颜色名称、HEX、RGB 等格式，如 <code>#FFFFFF</code></li>
+                    <li><strong>字体：</strong>可指定多个字体作为备选，如 <code>Arial, Microsoft YaHei, sans-serif</code></li>
+                    <li><strong>背景颜色：</strong>支持透明度设置，如 <code>rgba(0,0,0,0.7)</code></li>
+                    <li><strong>文字阴影：</strong>CSS text-shadow 属性值，如 <code>2px 2px 4px rgba(0,0,0,0.8)</code></li>
+                    <li><strong>位置：</strong>选择字幕显示在视频底部或顶部</li>
+                    <li><strong>偏移距离：</strong>字幕距离顶部或底部的距离，如 <code>50px</code></li>
+                    <li><strong>内边距：</strong>字幕内容的内边距，如 <code>8px 16px</code></li>
+                    <li><strong>圆角：</strong>字幕背景的圆角大小，如 <code>4px</code></li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>❓ 常见问题</h2>
+                <h3>Q: 脚本安装后不生效？</h3>
+                <p>A: 请检查：</p>
+                <ul>
+                    <li>确保已正确安装 Tampermonkey 或 Violentmonkey 扩展</li>
+                    <li>确保脚本已启用（在扩展管理界面查看）</li>
+                    <li>确认在设置中勾选了"启用自定义样式"</li>
+                    <li>尝试刷新页面或重启浏览器</li>
+                </ul>
+
+                <h3 style="margin-top: 20px;">Q: 为什么字幕样式没有变化？</h3>
+                <p>A: 可能原因：</p>
+                <ul>
+                    <li>LuminaEdu 网站更新了字幕的 HTML 结构，请反馈给开发者</li>
+                    <li>某些特殊页面可能使用了不同的字幕实现</li>
+                    <li>浏览器缓存问题，尝试清除缓存后重试</li>
+                </ul>
+
+                <h3 style="margin-top: 20px;">Q: 如何卸载脚本？</h3>
+                <p>A: 在 Tampermonkey 或 Violentmonkey 的管理界面中找到本脚本，点击删除即可。</p>
+            </div>
+
+            <div class="section">
+                <h2>🤝 贡献与反馈</h2>
+                <p>
+                    欢迎提交 Issue 和 Pull Request！如果你有任何问题或建议，请访问：
+                </p>
+                <div class="install-buttons">
+                    <a href="https://github.com/sangyuxiaowu/luminaedu-video-subtitle/issues" class="btn btn-secondary" target="_blank">
+                        🐛 提交问题
+                    </a>
+                    <a href="https://github.com/sangyuxiaowu/luminaedu-video-subtitle" class="btn btn-secondary" target="_blank">
+                        ⭐ GitHub 仓库
+                    </a>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📄 开源协议</h2>
+                <p>本项目采用 MIT 协议开源，你可以自由使用、修改和分发本项目。</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Made with ❤️ by <a href="https://github.com/sangyuxiaowu" target="_blank">桑榆肖物</a></p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/sangyuxiaowu/luminaedu-video-subtitle" target="_blank">GitHub</a> • 
+                <a href="https://github.com/sangyuxiaowu/luminaedu-video-subtitle/blob/main/LICENSE" target="_blank">License</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // 检测是否安装了用户脚本管理器
+        window.addEventListener('load', function() {
+            const hasUserscriptManager = typeof GM_info !== 'undefined' || 
+                                        typeof GM !== 'undefined' ||
+                                        typeof unsafeWindow !== 'undefined';
+            
+            if (!hasUserscriptManager) {
+                console.log('未检测到用户脚本管理器');
+            }
+        });
+    </script>
+</body>
+</html>
