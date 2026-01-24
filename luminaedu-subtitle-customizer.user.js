@@ -2,7 +2,7 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.0.1
+// @version       4.0.2
 // @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
@@ -34,7 +34,6 @@
         color: '#ffffff',
         backgroundColor: 'rgba(8, 8, 8, 0.75)',
         fontFamily: '"YouTube Noto", Roboto, "Arial Unicode Ms", Arial, Helvetica, Verdana, "PT Sans Caption", sans-serif',
-        borderRadius: '2.85556px',
         bottom: '50px',
         enabled: true
     };
@@ -165,7 +164,6 @@
                 color: ${settings.color} !important;
                 background: ${settings.backgroundColor} !important;
                 font-family: ${settings.fontFamily} !important;
-                border-radius: ${settings.borderRadius} !important;
             }
             .addText {
                 bottom: ${settings.bottom} !important;
@@ -218,7 +216,7 @@
                     字体大小
                     <span id="font-size-value" style="float: right;">${parseInt(settings.fontSize)}</span>
                 </label>
-                <input type="range" id="font-size-slider" min="12" max="40" value="${parseInt(settings.fontSize)}" style="width: 100%;">
+                <input type="range" id="font-size-slider" min="12" max="70" value="${parseInt(settings.fontSize)}" style="width: 100%;">
             </div>
 
             <div class="control-group" style="margin-bottom: 15px;">
@@ -241,15 +239,7 @@
                     距离底部
                     <span id="bottom-value" style="float: right;">${parseInt(settings.bottom)}px</span>
                 </label>
-                <input type="range" id="bottom-slider" min="10" max="150" value="${parseInt(settings.bottom)}" style="width: 100%;">
-            </div>
-
-            <div class="control-group" style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 5px; font-size: 13px;">
-                    圆角大小
-                    <span id="radius-value" style="float: right;">${parseFloat(settings.borderRadius)}px</span>
-                </label>
-                <input type="range" id="radius-slider" min="0" max="20" step="0.5" value="${parseFloat(settings.borderRadius)}" style="width: 100%;">
+                <input type="range" id="bottom-slider" min="10" max="350" value="${parseInt(settings.bottom)}" style="width: 100%;">
             </div>
 
             <div style="display: flex; gap: 10px;">
@@ -344,18 +334,6 @@
             applyStyles();
         });
 
-        // 圆角大小
-        const radiusSlider = controlPanel.querySelector('#radius-slider');
-        const radiusValue = controlPanel.querySelector('#radius-value');
-        radiusSlider.addEventListener('input', (e) => {
-            radiusValue.textContent = e.target.value + 'px';
-        });
-        radiusSlider.addEventListener('change', (e) => {
-            settings.borderRadius = e.target.value + 'px';
-            saveSettings();
-            applyStyles();
-        });
-
         // 重置按钮
         controlPanel.querySelector('#reset-btn').addEventListener('click', () => {
             settings = { ...defaultSettings };
@@ -372,8 +350,6 @@
             opacityValue.textContent = '75%';
             bottomSlider.value = 50;
             bottomValue.textContent = '50px';
-            radiusSlider.value = 2.85556;
-            radiusValue.textContent = '2.86px';
         });
 
         // 应用按钮
