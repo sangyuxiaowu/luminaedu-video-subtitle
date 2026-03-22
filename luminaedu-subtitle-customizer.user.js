@@ -2,7 +2,7 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.2.3
+// @version       4.3.0
 // @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
@@ -47,11 +47,14 @@
 
     // 全局变量
     let settings = { ...defaultSettings };
+    let aboutPanel = null;
     let controlPanel = null;
     let ttsControlPanel = null;
+    let aboutButton = null;
     let settingsButton = null;
     let ttsSettingsButton = null;
     let observer = null;
+    let aboutPanelInitialized = false;
     let panelInitialized = false;
     let ttsPanelInitialized = false;
     let isFirstVisit = true;
@@ -83,6 +86,8 @@
     const BUTTON_CONTAINER_ID = 'subtitle-settings-button-container';
     const DEFAULT_SPEECH_RATE = 1;
     const TTS_PAUSE_LEAD_TIME = 0.2;
+    const REPO_URL = 'https://github.com/sangyuxiaowu/luminaedu-video-subtitle';
+    const ISSUES_URL = 'https://github.com/sangyuxiaowu/luminaedu-video-subtitle/issues';
 
     // 检查是否是课程页面
     function isCoursePage() {
@@ -1052,6 +1057,50 @@
         setupPanelEvents();
     }
 
+    function setupAboutPanel() {
+        if (aboutPanel || aboutPanelInitialized) return;
+
+        const panel = document.createElement('div');
+        panel.id = 'subtitle-about-panel';
+        panel.style.cssText = `
+            display: none;
+            position: fixed;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            z-index: 1000000;
+            width: 320px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid #444;
+            backdrop-filter: blur(10px);
+        `;
+
+        panel.innerHTML = `
+            <div style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600;">关于插件</h3>
+                <span id="close-about-panel" style="cursor: pointer; font-size: 18px;">×</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px; line-height: 1.6;">
+                <div><strong>插件名称：</strong>LuminaEdu Video Subtitle Customizer</div>
+                <div><strong>作者：</strong>桑榆肖物</div>
+                <div><strong>版本：</strong>4.3.0</div>
+                <div><strong>GitHub：</strong><a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">${REPO_URL}</a></div>
+                <div><strong>问题反馈：</strong><a href="${ISSUES_URL}" target="_blank" rel="noopener noreferrer">${ISSUES_URL}</a></div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        aboutPanel = panel;
+        aboutPanelInitialized = true;
+
+        panel.querySelector('#close-about-panel').addEventListener('click', () => {
+            aboutPanel.style.display = 'none';
+        });
+    }
+
     function setupTtsControlPanel() {
         if (ttsControlPanel || ttsPanelInitialized) return;
 
@@ -1358,6 +1407,37 @@
         }
     }
 
+    function showAboutPanel(show) {
+        if (!aboutPanel) setupAboutPanel();
+        if (!aboutPanel) {
+            return;
+        }
+
+        aboutPanel.style.display = show ? 'block' : 'none';
+        if (!show) {
+            return;
+        }
+
+        const anchor = aboutButton || settingsButton;
+        if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            const panelWidth = 320;
+            const panelHeight = 210;
+            const left = Math.min(Math.max(rect.left, 12), Math.max(window.innerWidth - panelWidth - 12, 12));
+            const preferredTop = rect.top - panelHeight - 10;
+            const top = preferredTop >= 12 ? preferredTop : (rect.bottom + 10);
+
+            aboutPanel.style.left = `${left}px`;
+            aboutPanel.style.top = `${top}px`;
+            aboutPanel.style.right = 'auto';
+            aboutPanel.style.transform = 'none';
+        } else {
+            aboutPanel.style.left = '50%';
+            aboutPanel.style.top = '50%';
+            aboutPanel.style.transform = 'translate(-50%, -50%)';
+        }
+    }
+
     // 设置字幕设置按钮
     function setupButton() {
         // 如果不是课程页面，直接返回
@@ -1373,6 +1453,24 @@
         if (anchor.nextElementSibling !== container) {
             anchor.insertAdjacentElement('afterend', container);
         }
+
+        let aboutBtn = container.querySelector('.subtitle-about-btn');
+        if (!aboutBtn) {
+            aboutBtn = document.createElement('button');
+            aboutBtn.type = 'button';
+            aboutBtn.className = 'el-button el-button--small subtitle-about-btn';
+            aboutBtn.innerHTML = '<i class="el-icon-info"></i><span>关于插件</span>';
+
+            aboutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showAboutPanel(true);
+            });
+
+            container.appendChild(aboutBtn);
+        }
+        aboutButton = aboutBtn;
+        setupAboutPanel();
 
         let settingsBtn = container.querySelector('.subtitle-settings-btn');
         if (!settingsBtn) {
@@ -1409,17 +1507,6 @@
 
         ttsToggleButton = ttsBtn;
 
-        let ttsStatus = container.querySelector('.subtitle-tts-status');
-        if (!ttsStatus) {
-            ttsStatus = document.createElement('span');
-            ttsStatus.className = 'subtitle-tts-status subtitle-tts-status-idle';
-            ttsStatus.textContent = ttsStatusText;
-            ttsBtn.insertAdjacentElement('afterend', ttsStatus);
-        }
-
-        ttsStatusLabel = ttsStatus;
-        setTtsStatus(ttsStatusText, ttsStatusTone);
-
         let ttsSettingsBtn = container.querySelector('.subtitle-tts-settings-btn');
         if (!ttsSettingsBtn) {
             ttsSettingsBtn = document.createElement('button');
@@ -1437,6 +1524,25 @@
         }
 
         ttsSettingsButton = ttsSettingsBtn;
+
+        let ttsStatus = container.querySelector('.subtitle-tts-status');
+        if (!ttsStatus) {
+            ttsStatus = document.createElement('span');
+            ttsStatus.className = 'subtitle-tts-status subtitle-tts-status-idle';
+            ttsStatus.textContent = ttsStatusText;
+            ttsSettingsBtn.insertAdjacentElement('afterend', ttsStatus);
+        }
+
+        ttsStatusLabel = ttsStatus;
+        setTtsStatus(ttsStatusText, ttsStatusTone);
+
+        const desiredOrder = [aboutBtn, settingsBtn, ttsBtn, ttsSettingsBtn, ttsStatus];
+        desiredOrder.forEach((element) => {
+            if (element && element.parentNode === container) {
+                container.appendChild(element);
+            }
+        });
+
         setupTtsControlPanel();
         const panelVoiceSelect = ttsControlPanel ? ttsControlPanel.querySelector('#tts-voice-select') : null;
         if (panelVoiceSelect) {
@@ -1587,6 +1693,10 @@
                     controlPanel.style.display = 'none';
                 }
 
+                if (aboutPanel) {
+                    aboutPanel.style.display = 'none';
+                }
+
                 if (ttsControlPanel) {
                     ttsControlPanel.style.display = 'none';
                 }
@@ -1610,12 +1720,23 @@
             flex-wrap: wrap;
         }
 
+        .subtitle-about-btn,
         .subtitle-settings-btn,
         .subtitle-tts-btn,
         .subtitle-tts-settings-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
+        }
+
+        #subtitle-about-panel a {
+            color: #79bbff;
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        #subtitle-about-panel a:hover {
+            text-decoration: underline;
         }
 
         .subtitle-tts-status {
