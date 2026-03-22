@@ -40,7 +40,9 @@
 
     const defaultTtsSettings = {
         enabled: false,
-        voice: ''
+        voice: '',
+        rate: 1,
+        volume: 1
     };
 
     // 全局变量
@@ -66,11 +68,11 @@
     let ttsPreparing = false;
     let ttsSessionId = 0;
     let ttsCurrentUtteranceToken = 0;
+    let ttsSpeechActive = false;
+    let ttsPausedVideoForSpeech = false;
 
     const BUTTON_CONTAINER_ID = 'subtitle-settings-button-container';
     const DEFAULT_SPEECH_RATE = 1;
-    const MAX_SPEECH_RATE = 2;
-    const BASE_CHARS_PER_SECOND = 4.25;
 
     // 检查是否是课程页面
     function isCoursePage() {
@@ -499,25 +501,12 @@
         return nextCue ? nextCue.start : ttsCues[cueIndex].end;
     }
 
-    function estimateSpeechDuration(text) {
-        const compactText = (text || '').replace(/\s+/g, '');
-        const punctuationCount = ((text || '').match(/[，。！？；：,.!?;:]/g) || []).length;
-        const charCount = compactText.length;
-
-        return Math.max(0.6, (charCount / BASE_CHARS_PER_SECOND) + (punctuationCount * 0.18));
+    function getConfiguredSpeechRate() {
+        return clamp(Number(ttsSettings.rate) || DEFAULT_SPEECH_RATE, 0.5, 2);
     }
 
-    function computeCueSpeechRate(cueIndex, currentVideoTime) {
-        const cue = ttsCues[cueIndex];
-        const availableEnd = getCueWindowEnd(cueIndex);
-        const remainingTime = Math.max(availableEnd - currentVideoTime - 0.05, 0.15);
-        const estimatedDuration = estimateSpeechDuration(cue.text);
-        const rate = estimatedDuration > remainingTime ? clamp(estimatedDuration / remainingTime, DEFAULT_SPEECH_RATE, MAX_SPEECH_RATE) : DEFAULT_SPEECH_RATE;
-
-        return {
-            remainingTime,
-            rate
-        };
+    function getConfiguredSpeechVolume() {
+        return clamp(Number(ttsSettings.volume), 0, 1);
     }
 
     async function refreshTtsCues() {
@@ -542,6 +531,8 @@
         }
 
         ttsCurrentUtteranceToken += 1;
+        ttsSpeechActive = false;
+        ttsPausedVideoForSpeech = false;
 
         if (resetCueIndex) {
             ttsCurrentCueIndex = -1;
@@ -565,22 +556,26 @@
         }
 
         const cue = ttsCues[cueIndex];
-        const playbackState = computeCueSpeechRate(cueIndex, video.currentTime);
-        if (playbackState.remainingTime <= 0.15) {
-            return;
-        }
 
         cancelCurrentSpeech(false);
         const currentToken = ttsCurrentUtteranceToken;
         const utterance = new SpeechSynthesisUtterance(cue.text);
         utterance.voice = voice;
         utterance.lang = voice.lang || 'zh-CN';
-        utterance.rate = playbackState.rate;
+        utterance.rate = getConfiguredSpeechRate();
         utterance.pitch = 1;
-        utterance.volume = 1;
+        utterance.volume = getConfiguredSpeechVolume();
+        ttsSpeechActive = true;
         utterance.onend = () => {
             if (currentToken !== ttsCurrentUtteranceToken) {
                 return;
+            }
+
+            ttsSpeechActive = false;
+
+            if (ttsPausedVideoForSpeech && video.paused && ttsSettings.enabled) {
+                ttsPausedVideoForSpeech = false;
+                video.play().catch(() => {});
             }
         };
         utterance.onerror = (event) => {
@@ -588,6 +583,8 @@
                 return;
             }
 
+            ttsSpeechActive = false;
+            ttsPausedVideoForSpeech = false;
             console.error('浏览器语音播放失败', event.error || event);
         };
 
@@ -604,6 +601,14 @@
         const synth = getSpeechSynthesisEngine();
 
         if (!video || !ttsCues.length || !synth) {
+            return;
+        }
+
+        if (ttsSpeechActive && ttsCurrentCueIndex !== -1 && video.currentTime >= getCueWindowEnd(ttsCurrentCueIndex) - 0.05) {
+            if (!video.paused && !ttsPausedVideoForSpeech) {
+                ttsPausedVideoForSpeech = true;
+                video.pause();
+            }
             return;
         }
 
@@ -658,6 +663,10 @@
     }
 
     function handleVideoPause() {
+        if (ttsPausedVideoForSpeech) {
+            return;
+        }
+
         const synth = getSpeechSynthesisEngine();
         if (synth && synth.speaking && !synth.paused) {
             synth.pause();
@@ -842,6 +851,20 @@
                 <input type="range" id="bottom-slider" min="10" max="350" value="${parseInt(settings.bottom)}" style="width: 100%;">
             </div>
 
+            <div class="control-group" style="margin-bottom: 15px; padding-top: 10px; border-top: 1px solid #333;">
+                <div style="margin-bottom: 10px; font-size: 13px; font-weight: 600;">中文配音</div>
+                <label style="display: block; margin-bottom: 5px; font-size: 13px;">
+                    配音倍速
+                    <span id="tts-rate-value" style="float: right;">${Number(ttsSettings.rate).toFixed(2)}x</span>
+                </label>
+                <input type="range" id="tts-rate-slider" min="0.5" max="2" step="0.05" value="${Number(ttsSettings.rate)}" style="width: 100%; margin-bottom: 12px;">
+                <label style="display: block; margin-bottom: 5px; font-size: 13px;">
+                    配音音量
+                    <span id="tts-volume-value" style="float: right;">${Math.round(Number(ttsSettings.volume) * 100)}%</span>
+                </label>
+                <input type="range" id="tts-volume-slider" min="0" max="1" step="0.05" value="${Number(ttsSettings.volume)}" style="width: 100%;">
+            </div>
+
             <div style="display: flex; gap: 10px;">
                 <button id="reset-btn" style="flex: 1; padding: 8px; background: #555; color: white; border: none; border-radius: 4px; cursor: pointer;">重置</button>
                 <button id="apply-btn" style="flex: 1; padding: 8px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;">应用</button>
@@ -931,10 +954,45 @@
             applyStyles();
         });
 
+        const ttsRateSlider = controlPanel.querySelector('#tts-rate-slider');
+        const ttsRateValue = controlPanel.querySelector('#tts-rate-value');
+        const ttsVolumeSlider = controlPanel.querySelector('#tts-volume-slider');
+        const ttsVolumeValue = controlPanel.querySelector('#tts-volume-value');
+
+        ttsRateSlider.addEventListener('input', (e) => {
+            ttsRateValue.textContent = Number(e.target.value).toFixed(2) + 'x';
+        });
+        ttsRateSlider.addEventListener('change', (e) => {
+            ttsSettings.rate = Number(e.target.value);
+            saveTtsSettings();
+
+            if (ttsSettings.enabled) {
+                cancelCurrentSpeech(true);
+                scheduleTtsSync();
+            }
+        });
+
+        ttsVolumeSlider.addEventListener('input', (e) => {
+            const volume = Number(e.target.value);
+            ttsVolumeValue.textContent = Math.round(volume * 100) + '%';
+        });
+        ttsVolumeSlider.addEventListener('change', (e) => {
+            ttsSettings.volume = Number(e.target.value);
+            saveTtsSettings();
+
+            if (ttsSettings.enabled) {
+                cancelCurrentSpeech(true);
+                scheduleTtsSync();
+            }
+        });
+
         // 重置按钮
         controlPanel.querySelector('#reset-btn').addEventListener('click', () => {
+            const wasTtsEnabled = ttsSettings.enabled;
             settings = { ...defaultSettings };
+            ttsSettings = { ...defaultTtsSettings, voice: ttsSettings.voice };
             saveSettings();
+            saveTtsSettings();
             applyStyles();
 
             // 更新UI
@@ -947,6 +1005,16 @@
             opacityValue.textContent = '75%';
             bottomSlider.value = 50;
             bottomValue.textContent = '50px';
+            ttsRateSlider.value = String(defaultTtsSettings.rate);
+            ttsRateValue.textContent = Number(defaultTtsSettings.rate).toFixed(2) + 'x';
+            ttsVolumeSlider.value = String(defaultTtsSettings.volume);
+            ttsVolumeValue.textContent = Math.round(defaultTtsSettings.volume * 100) + '%';
+
+            if (wasTtsEnabled) {
+                stopTtsPlayback();
+            }
+
+            updateTtsButtonState();
         });
 
         // 应用按钮
