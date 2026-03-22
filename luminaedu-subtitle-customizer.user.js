@@ -1204,8 +1204,14 @@
         const anchor = ttsSettingsButton || ttsToggleButton || settingsButton;
         if (anchor) {
             const rect = anchor.getBoundingClientRect();
-            ttsControlPanel.style.left = `${Math.max(rect.left, 12)}px`;
-            ttsControlPanel.style.top = `${rect.bottom + 10}px`;
+            const panelWidth = 320;
+            const panelHeight = 230;
+            const left = Math.min(Math.max(rect.left, 12), Math.max(window.innerWidth - panelWidth - 12, 12));
+            const preferredTop = rect.top - panelHeight - 10;
+            const top = preferredTop >= 12 ? preferredTop : (rect.bottom + 10);
+
+            ttsControlPanel.style.left = `${left}px`;
+            ttsControlPanel.style.top = `${top}px`;
             ttsControlPanel.style.right = 'auto';
             ttsControlPanel.style.transform = 'none';
         } else {
