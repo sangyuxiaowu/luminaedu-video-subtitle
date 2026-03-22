@@ -39,6 +39,8 @@
 
 ![效果图](image.png)
 
+![中文配音](tts.png)
+
 ## 技术细节
 
 - 使用 MutationObserver 监听 DOM 变化，并在视频区域重建后重新挂载按钮

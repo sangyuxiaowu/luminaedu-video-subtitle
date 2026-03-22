@@ -2,7 +2,7 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.2.2
+// @version       4.2.3
 // @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
@@ -627,6 +627,14 @@
     function getConfiguredSpeechVolume() {
         return clamp(Number(ttsSettings.volume), 0, 1);
     }
+    function isSpeechPlaybackActive() {
+        const synth = getSpeechSynthesisEngine();
+        if (!synth) {
+            return ttsSpeechActive;
+        }
+
+        return ttsSpeechActive || synth.speaking || synth.pending || (synth.paused && ttsCurrentCueIndex !== -1);
+    }
 
     async function refreshTtsCues() {
         const switched = await ensureChineseSubtitleSelected();
@@ -733,12 +741,13 @@
 
         const video = getVideoElement();
         const synth = getSpeechSynthesisEngine();
+        const speechActive = isSpeechPlaybackActive();
 
         if (!video || !ttsCues.length || !synth) {
             return;
         }
 
-        if (ttsSpeechActive && ttsCurrentCueIndex !== -1) {
+        if (speechActive && ttsCurrentCueIndex !== -1) {
             const cueWindowEnd = ttsCurrentCueWindowEnd > 0 ? ttsCurrentCueWindowEnd : getCueWindowEnd(ttsCurrentCueIndex);
             if (video.currentTime >= cueWindowEnd - TTS_PAUSE_LEAD_TIME) {
                 if (isPlayerPlaying() && !ttsPausedVideoForSpeech) {
@@ -765,6 +774,11 @@
 
         const cueIndex = findCueIndex(video.currentTime);
         if (cueIndex === -1) {
+            if (speechActive && ttsCurrentCueIndex !== -1) {
+                setTtsStatus('字幕空档，继续播音', 'waiting');
+                return;
+            }
+
             setTtsStatus('当前无字幕片段', 'idle');
             cancelCurrentSpeech(true);
             return;
@@ -806,7 +820,7 @@
 
             const video = getVideoElement();
             const synth = getSpeechSynthesisEngine();
-            if (ttsSettings.enabled && video && (isPlayerPlaying() || ttsSpeechActive || ttsPausedVideoForSpeech || (synth && synth.paused))) {
+            if (ttsSettings.enabled && video && (isPlayerPlaying() || isSpeechPlaybackActive() || ttsPausedVideoForSpeech || (synth && synth.paused))) {
                 scheduleTtsSync();
             }
         });
