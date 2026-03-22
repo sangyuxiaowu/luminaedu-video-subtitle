@@ -2,7 +2,7 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.2.0
+// @version       4.2.2
 // @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
@@ -61,6 +61,7 @@
     let lastIsCoursePage = false;
     let ttsSettings = { ...defaultTtsSettings };
     let ttsToggleButton = null;
+    let ttsStatusLabel = null;
     let ttsVoiceSelect = null;
     let ttsVoices = [];
     let ttsCues = [];
@@ -73,9 +74,15 @@
     let ttsCurrentUtteranceToken = 0;
     let ttsSpeechActive = false;
     let ttsPausedVideoForSpeech = false;
+    let ttsMonitorFrameId = 0;
+    let ttsPauseRetryTimer = 0;
+    let ttsCurrentCueWindowEnd = -1;
+    let ttsStatusText = '未开启';
+    let ttsStatusTone = 'idle';
 
     const BUTTON_CONTAINER_ID = 'subtitle-settings-button-container';
     const DEFAULT_SPEECH_RATE = 1;
+    const TTS_PAUSE_LEAD_TIME = 0.2;
 
     // 检查是否是课程页面
     function isCoursePage() {
@@ -417,6 +424,40 @@
         }
     }
 
+    function clearTtsPauseRetry() {
+        if (ttsPauseRetryTimer) {
+            clearTimeout(ttsPauseRetryTimer);
+            ttsPauseRetryTimer = 0;
+        }
+    }
+
+    function enforceVideoPause(retriesLeft = 3) {
+        clearTtsPauseRetry();
+
+        if (!ttsPausedVideoForSpeech) {
+            return;
+        }
+
+        if (!isPlayerPlaying()) {
+            return;
+        }
+
+        pauseVideoPlayback();
+
+        if (retriesLeft > 0) {
+            ttsPauseRetryTimer = setTimeout(() => {
+                enforceVideoPause(retriesLeft - 1);
+            }, 120);
+        }
+    }
+
+    function stopTtsMonitor() {
+        if (ttsMonitorFrameId) {
+            cancelAnimationFrame(ttsMonitorFrameId);
+            ttsMonitorFrameId = 0;
+        }
+    }
+
     function getSpeechSynthesisEngine() {
         return window.speechSynthesis || null;
     }
@@ -458,6 +499,7 @@
             option.textContent = '无可用中文语音';
             ttsVoiceSelect.appendChild(option);
             ttsVoiceSelect.disabled = true;
+            setTtsStatus('无中文语音', 'error');
             updateTtsButtonState();
             return;
         }
@@ -527,6 +569,18 @@
         document.head.appendChild(style);
     }
 
+    function setTtsStatus(text, tone = 'idle') {
+        ttsStatusText = text;
+        ttsStatusTone = tone;
+
+        if (!ttsStatusLabel) {
+            return;
+        }
+
+        ttsStatusLabel.textContent = text;
+        ttsStatusLabel.className = `subtitle-tts-status subtitle-tts-status-${tone}`;
+    }
+
     function updateTtsButtonState() {
         if (!ttsToggleButton) {
             return;
@@ -541,6 +595,19 @@
 
         if (ttsVoiceSelect) {
             ttsVoiceSelect.disabled = ttsPreparing || !hasVoices;
+        }
+
+        if (!hasVoices) {
+            setTtsStatus('无中文语音', 'error');
+        } else if (ttsPreparing) {
+            setTtsStatus('加载中', 'working');
+        } else if (!ttsSettings.enabled) {
+            setTtsStatus('未开启', 'idle');
+        } else if (!ttsSpeechActive && !ttsPausedVideoForSpeech && ttsStatusText === '未开启') {
+            setTtsStatus('已开启', 'active');
+        } else if (ttsStatusLabel) {
+            ttsStatusLabel.textContent = ttsStatusText;
+            ttsStatusLabel.className = `subtitle-tts-status subtitle-tts-status-${ttsStatusTone}`;
         }
     }
 
@@ -572,8 +639,11 @@
         ttsCues = parseSubtitleContent(subtitleContent);
 
         if (!ttsCues.length) {
+            setTtsStatus('未读取到字幕', 'error');
             throw new Error('未读取到可用字幕内容');
         }
+
+        setTtsStatus(`已载入${ttsCues.length}条`, 'active');
     }
 
     function cancelCurrentSpeech(resetCueIndex = true) {
@@ -585,6 +655,8 @@
         ttsCurrentUtteranceToken += 1;
         ttsSpeechActive = false;
         ttsPausedVideoForSpeech = false;
+        ttsCurrentCueWindowEnd = -1;
+        clearTtsPauseRetry();
 
         if (resetCueIndex) {
             ttsCurrentCueIndex = -1;
@@ -604,6 +676,7 @@
 
         const voice = getSelectedTtsVoice();
         if (!voice) {
+            setTtsStatus('缺少中文语音', 'error');
             throw new Error('浏览器未提供可用中文语音');
         }
 
@@ -618,15 +691,21 @@
         utterance.pitch = 1;
         utterance.volume = getConfiguredSpeechVolume();
         ttsSpeechActive = true;
+        ttsCurrentCueWindowEnd = getCueWindowEnd(cueIndex);
+        setTtsStatus(`播放第${cueIndex + 1}条`, 'active');
         utterance.onend = () => {
             if (currentToken !== ttsCurrentUtteranceToken) {
                 return;
             }
 
             ttsSpeechActive = false;
+            ttsCurrentCueWindowEnd = -1;
+            setTtsStatus('本条播放完成', 'active');
 
-            if (ttsPausedVideoForSpeech && video.paused && ttsSettings.enabled) {
+            if (ttsPausedVideoForSpeech && ttsSettings.enabled) {
                 ttsPausedVideoForSpeech = false;
+                clearTtsPauseRetry();
+                setTtsStatus('恢复视频播放', 'working');
                 resumeVideoPlayback();
             }
         };
@@ -637,6 +716,9 @@
 
             ttsSpeechActive = false;
             ttsPausedVideoForSpeech = false;
+            ttsCurrentCueWindowEnd = -1;
+            clearTtsPauseRetry();
+            setTtsStatus('语音播放失败', 'error');
             console.error('浏览器语音播放失败', event.error || event);
         };
 
@@ -656,34 +738,55 @@
             return;
         }
 
-        if (ttsSpeechActive && ttsCurrentCueIndex !== -1 && video.currentTime >= getCueWindowEnd(ttsCurrentCueIndex) - 0.05) {
-            if (!video.paused && !ttsPausedVideoForSpeech) {
-                ttsPausedVideoForSpeech = true;
-                pauseVideoPlayback();
+        if (ttsSpeechActive && ttsCurrentCueIndex !== -1) {
+            const cueWindowEnd = ttsCurrentCueWindowEnd > 0 ? ttsCurrentCueWindowEnd : getCueWindowEnd(ttsCurrentCueIndex);
+            if (video.currentTime >= cueWindowEnd - TTS_PAUSE_LEAD_TIME) {
+                if (isPlayerPlaying() && !ttsPausedVideoForSpeech) {
+                    ttsPausedVideoForSpeech = true;
+                    setTtsStatus('等待暂停视频', 'waiting');
+                    enforceVideoPause();
+                } else if (ttsPausedVideoForSpeech && isPlayerPlaying()) {
+                    setTtsStatus('重试暂停视频', 'waiting');
+                    enforceVideoPause();
+                }
+                return;
+            }
+        }
+
+        if (ttsPausedVideoForSpeech) {
+            if (isPlayerPlaying()) {
+                setTtsStatus('播放器未暂停，重试', 'waiting');
+                enforceVideoPause();
+            } else {
+                setTtsStatus('已暂停，等待配音', 'waiting');
             }
             return;
         }
 
         const cueIndex = findCueIndex(video.currentTime);
         if (cueIndex === -1) {
+            setTtsStatus('当前无字幕片段', 'idle');
             cancelCurrentSpeech(true);
             return;
         }
 
-        if (video.paused) {
+        if (!isPlayerPlaying()) {
             if (synth.speaking && !synth.paused) {
+                setTtsStatus('播放器暂停中', 'idle');
                 synth.pause();
             }
             return;
         }
 
         if (synth.paused && cueIndex === ttsCurrentCueIndex) {
+            setTtsStatus(`继续第${cueIndex + 1}条`, 'active');
             synth.resume();
             return;
         }
 
         if (cueIndex !== ttsCurrentCueIndex) {
             playCueForCurrentTime(cueIndex).catch((error) => {
+                setTtsStatus('切换配音失败', 'error');
                 console.error('播放中文配音失败', error);
                 cancelCurrentSpeech(false);
             });
@@ -691,14 +794,21 @@
     }
 
     function scheduleTtsSync() {
-        if (ttsSyncScheduled) {
+        if (ttsSyncScheduled || ttsMonitorFrameId) {
             return;
         }
 
         ttsSyncScheduled = true;
-        requestAnimationFrame(() => {
+        ttsMonitorFrameId = requestAnimationFrame(() => {
             ttsSyncScheduled = false;
+            ttsMonitorFrameId = 0;
             syncCurrentCuePlayback();
+
+            const video = getVideoElement();
+            const synth = getSpeechSynthesisEngine();
+            if (ttsSettings.enabled && video && (isPlayerPlaying() || ttsSpeechActive || ttsPausedVideoForSpeech || (synth && synth.paused))) {
+                scheduleTtsSync();
+            }
         });
     }
 
@@ -716,11 +826,13 @@
 
     function handleVideoPause() {
         if (ttsPausedVideoForSpeech) {
+            setTtsStatus('已暂停，等待配音', 'waiting');
             return;
         }
 
         const synth = getSpeechSynthesisEngine();
         if (synth && synth.speaking && !synth.paused) {
+            setTtsStatus('视频已暂停', 'idle');
             synth.pause();
         }
     }
@@ -764,13 +876,15 @@
     }
 
     function suspendTtsPlayback() {
+        const wasPausedForSpeech = ttsPausedVideoForSpeech;
         ttsSessionId += 1;
         cancelCurrentSpeech(true);
-        if (ttsPausedVideoForSpeech) {
-            ttsPausedVideoForSpeech = false;
+        stopTtsMonitor();
+        if (wasPausedForSpeech) {
             resumeVideoPlayback();
         }
         restoreVideoMutedState();
+        setTtsStatus('未开启', 'idle');
     }
 
     async function startTtsPlayback() {
@@ -791,6 +905,7 @@
             await waitFor(() => getAvailableChineseVoices().length > 0, 1500, 100);
             populateTtsVoiceSelect();
             if (!ttsVoices.length) {
+                setTtsStatus('浏览器无中文语音', 'error');
                 throw new Error('浏览器未提供中文语音');
             }
 
@@ -799,6 +914,7 @@
             ttsSessionId += 1;
             ttsOriginalMuted = video.muted;
             video.muted = true;
+            setTtsStatus('准备开始配音', 'working');
             scheduleTtsSync();
         } finally {
             ttsPreparing = false;
@@ -830,6 +946,7 @@
         try {
             await startTtsPlayback();
         } catch (error) {
+            setTtsStatus('启动失败', 'error');
             console.error('启用中文配音失败', error);
             ttsSettings.enabled = false;
             saveTtsSettings();
@@ -1278,6 +1395,17 @@
 
         ttsToggleButton = ttsBtn;
 
+        let ttsStatus = container.querySelector('.subtitle-tts-status');
+        if (!ttsStatus) {
+            ttsStatus = document.createElement('span');
+            ttsStatus.className = 'subtitle-tts-status subtitle-tts-status-idle';
+            ttsStatus.textContent = ttsStatusText;
+            ttsBtn.insertAdjacentElement('afterend', ttsStatus);
+        }
+
+        ttsStatusLabel = ttsStatus;
+        setTtsStatus(ttsStatusText, ttsStatusTone);
+
         let ttsSettingsBtn = container.querySelector('.subtitle-tts-settings-btn');
         if (!ttsSettingsBtn) {
             ttsSettingsBtn = document.createElement('button');
@@ -1474,6 +1602,50 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+        }
+
+        .subtitle-tts-status {
+            display: inline-flex;
+            align-items: center;
+            min-height: 32px;
+            padding: 0 10px;
+            border-radius: 16px;
+            font-size: 12px;
+            line-height: 1;
+            white-space: nowrap;
+            border: 1px solid #dcdfe6;
+            background: #f4f4f5;
+            color: #606266;
+        }
+
+        .subtitle-tts-status-idle {
+            background: #f4f4f5;
+            color: #606266;
+            border-color: #dcdfe6;
+        }
+
+        .subtitle-tts-status-working {
+            background: #ecf5ff;
+            color: #409eff;
+            border-color: #b3d8ff;
+        }
+
+        .subtitle-tts-status-active {
+            background: #f0f9eb;
+            color: #67c23a;
+            border-color: #c2e7b0;
+        }
+
+        .subtitle-tts-status-waiting {
+            background: #fdf6ec;
+            color: #e6a23c;
+            border-color: #f5dab1;
+        }
+
+        .subtitle-tts-status-error {
+            background: #fef0f0;
+            color: #f56c6c;
+            border-color: #fbc4c4;
         }
 
         .subtitle-tts-voice-select {
