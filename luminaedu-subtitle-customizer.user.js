@@ -48,9 +48,12 @@
     // 全局变量
     let settings = { ...defaultSettings };
     let controlPanel = null;
+    let ttsControlPanel = null;
     let settingsButton = null;
+    let ttsSettingsButton = null;
     let observer = null;
     let panelInitialized = false;
+    let ttsPanelInitialized = false;
     let isFirstVisit = true;
     let panelShownForFirstVisit = false;
     let scriptInitialized = false;
@@ -365,6 +368,55 @@
         return document.querySelector('video');
     }
 
+    function getPlayerControlButton() {
+        return document.querySelector('.vjs-play-control.vjs-control.vjs-button');
+    }
+
+    function isPlayerPlaying() {
+        const controlButton = getPlayerControlButton();
+        if (controlButton) {
+            return controlButton.classList.contains('vjs-playing');
+        }
+
+        const video = getVideoElement();
+        return !!video && !video.paused;
+    }
+
+    function clickPlayerControlIfNeeded(shouldPlay) {
+        const controlButton = getPlayerControlButton();
+        if (!controlButton) {
+            return false;
+        }
+
+        const isPlaying = controlButton.classList.contains('vjs-playing');
+        const isPaused = controlButton.classList.contains('vjs-paused');
+
+        if ((shouldPlay && isPaused) || (!shouldPlay && isPlaying)) {
+            controlButton.click();
+            return true;
+        }
+
+        return false;
+    }
+
+    function pauseVideoPlayback() {
+        const clicked = clickPlayerControlIfNeeded(false);
+        const video = getVideoElement();
+
+        if (!clicked && video && !video.paused) {
+            video.pause();
+        }
+    }
+
+    function resumeVideoPlayback() {
+        const clicked = clickPlayerControlIfNeeded(true);
+        const video = getVideoElement();
+
+        if (!clicked && video && video.paused) {
+            video.play().catch(() => {});
+        }
+    }
+
     function getSpeechSynthesisEngine() {
         return window.speechSynthesis || null;
     }
@@ -575,7 +627,7 @@
 
             if (ttsPausedVideoForSpeech && video.paused && ttsSettings.enabled) {
                 ttsPausedVideoForSpeech = false;
-                video.play().catch(() => {});
+                resumeVideoPlayback();
             }
         };
         utterance.onerror = (event) => {
@@ -607,7 +659,7 @@
         if (ttsSpeechActive && ttsCurrentCueIndex !== -1 && video.currentTime >= getCueWindowEnd(ttsCurrentCueIndex) - 0.05) {
             if (!video.paused && !ttsPausedVideoForSpeech) {
                 ttsPausedVideoForSpeech = true;
-                video.pause();
+                pauseVideoPlayback();
             }
             return;
         }
@@ -714,6 +766,10 @@
     function suspendTtsPlayback() {
         ttsSessionId += 1;
         cancelCurrentSpeech(true);
+        if (ttsPausedVideoForSpeech) {
+            ttsPausedVideoForSpeech = false;
+            resumeVideoPlayback();
+        }
         restoreVideoMutedState();
     }
 
@@ -851,20 +907,6 @@
                 <input type="range" id="bottom-slider" min="10" max="350" value="${parseInt(settings.bottom)}" style="width: 100%;">
             </div>
 
-            <div class="control-group" style="margin-bottom: 15px; padding-top: 10px; border-top: 1px solid #333;">
-                <div style="margin-bottom: 10px; font-size: 13px; font-weight: 600;">中文配音</div>
-                <label style="display: block; margin-bottom: 5px; font-size: 13px;">
-                    配音倍速
-                    <span id="tts-rate-value" style="float: right;">${Number(ttsSettings.rate).toFixed(2)}x</span>
-                </label>
-                <input type="range" id="tts-rate-slider" min="0.5" max="2" step="0.05" value="${Number(ttsSettings.rate)}" style="width: 100%; margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 5px; font-size: 13px;">
-                    配音音量
-                    <span id="tts-volume-value" style="float: right;">${Math.round(Number(ttsSettings.volume) * 100)}%</span>
-                </label>
-                <input type="range" id="tts-volume-slider" min="0" max="1" step="0.05" value="${Number(ttsSettings.volume)}" style="width: 100%;">
-            </div>
-
             <div style="display: flex; gap: 10px;">
                 <button id="reset-btn" style="flex: 1; padding: 8px; background: #555; color: white; border: none; border-radius: 4px; cursor: pointer;">重置</button>
                 <button id="apply-btn" style="flex: 1; padding: 8px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;">应用</button>
@@ -877,6 +919,61 @@
 
         // 设置事件监听
         setupPanelEvents();
+    }
+
+    function setupTtsControlPanel() {
+        if (ttsControlPanel || ttsPanelInitialized) return;
+
+        const panel = document.createElement('div');
+        panel.id = 'subtitle-tts-control-panel';
+        panel.style.cssText = `
+            display: none;
+            position: fixed;
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            z-index: 1000000;
+            width: 320px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid #444;
+            backdrop-filter: blur(10px);
+        `;
+
+        panel.innerHTML = `
+            <div style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 600;">配音设置</h3>
+                <span id="close-tts-panel" style="cursor: pointer; font-size: 18px;">×</span>
+            </div>
+
+            <div class="control-group" style="margin-bottom: 14px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 13px;">中文语音</label>
+                <select id="tts-voice-select" class="subtitle-tts-voice-select" style="width: 100%;"></select>
+            </div>
+
+            <div class="control-group" style="margin-bottom: 14px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 13px;">
+                    配音倍速
+                    <span id="tts-rate-value" style="float: right;">${Number(ttsSettings.rate).toFixed(2)}x</span>
+                </label>
+                <input type="range" id="tts-rate-slider" min="0.5" max="2" step="0.05" value="${Number(ttsSettings.rate)}" style="width: 100%;">
+            </div>
+
+            <div class="control-group" style="margin-bottom: 4px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 13px;">
+                    配音音量
+                    <span id="tts-volume-value" style="float: right;">${Math.round(Number(ttsSettings.volume) * 100)}%</span>
+                </label>
+                <input type="range" id="tts-volume-slider" min="0" max="1" step="0.05" value="${Number(ttsSettings.volume)}" style="width: 100%;">
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        ttsControlPanel = panel;
+        ttsPanelInitialized = true;
+
+        setupTtsPanelEvents();
     }
 
     // 设置面板事件
@@ -954,45 +1051,10 @@
             applyStyles();
         });
 
-        const ttsRateSlider = controlPanel.querySelector('#tts-rate-slider');
-        const ttsRateValue = controlPanel.querySelector('#tts-rate-value');
-        const ttsVolumeSlider = controlPanel.querySelector('#tts-volume-slider');
-        const ttsVolumeValue = controlPanel.querySelector('#tts-volume-value');
-
-        ttsRateSlider.addEventListener('input', (e) => {
-            ttsRateValue.textContent = Number(e.target.value).toFixed(2) + 'x';
-        });
-        ttsRateSlider.addEventListener('change', (e) => {
-            ttsSettings.rate = Number(e.target.value);
-            saveTtsSettings();
-
-            if (ttsSettings.enabled) {
-                cancelCurrentSpeech(true);
-                scheduleTtsSync();
-            }
-        });
-
-        ttsVolumeSlider.addEventListener('input', (e) => {
-            const volume = Number(e.target.value);
-            ttsVolumeValue.textContent = Math.round(volume * 100) + '%';
-        });
-        ttsVolumeSlider.addEventListener('change', (e) => {
-            ttsSettings.volume = Number(e.target.value);
-            saveTtsSettings();
-
-            if (ttsSettings.enabled) {
-                cancelCurrentSpeech(true);
-                scheduleTtsSync();
-            }
-        });
-
         // 重置按钮
         controlPanel.querySelector('#reset-btn').addEventListener('click', () => {
-            const wasTtsEnabled = ttsSettings.enabled;
             settings = { ...defaultSettings };
-            ttsSettings = { ...defaultTtsSettings, voice: ttsSettings.voice };
             saveSettings();
-            saveTtsSettings();
             applyStyles();
 
             // 更新UI
@@ -1005,16 +1067,6 @@
             opacityValue.textContent = '75%';
             bottomSlider.value = 50;
             bottomValue.textContent = '50px';
-            ttsRateSlider.value = String(defaultTtsSettings.rate);
-            ttsRateValue.textContent = Number(defaultTtsSettings.rate).toFixed(2) + 'x';
-            ttsVolumeSlider.value = String(defaultTtsSettings.volume);
-            ttsVolumeValue.textContent = Math.round(defaultTtsSettings.volume * 100) + '%';
-
-            if (wasTtsEnabled) {
-                stopTtsPlayback();
-            }
-
-            updateTtsButtonState();
         });
 
         // 应用按钮
@@ -1058,6 +1110,57 @@
         });
     }
 
+    function setupTtsPanelEvents() {
+        if (!ttsControlPanel) return;
+
+        const voiceSelect = ttsControlPanel.querySelector('#tts-voice-select');
+        const ttsRateSlider = ttsControlPanel.querySelector('#tts-rate-slider');
+        const ttsRateValue = ttsControlPanel.querySelector('#tts-rate-value');
+        const ttsVolumeSlider = ttsControlPanel.querySelector('#tts-volume-slider');
+        const ttsVolumeValue = ttsControlPanel.querySelector('#tts-volume-value');
+
+        voiceSelect.addEventListener('change', () => {
+            ttsSettings.voice = voiceSelect.value;
+            saveTtsSettings();
+
+            if (ttsSettings.enabled) {
+                cancelCurrentSpeech(true);
+                scheduleTtsSync();
+            }
+        });
+
+        ttsRateSlider.addEventListener('input', (e) => {
+            ttsRateValue.textContent = Number(e.target.value).toFixed(2) + 'x';
+        });
+        ttsRateSlider.addEventListener('change', (e) => {
+            ttsSettings.rate = Number(e.target.value);
+            saveTtsSettings();
+
+            if (ttsSettings.enabled) {
+                cancelCurrentSpeech(true);
+                scheduleTtsSync();
+            }
+        });
+
+        ttsVolumeSlider.addEventListener('input', (e) => {
+            const volume = Number(e.target.value);
+            ttsVolumeValue.textContent = Math.round(volume * 100) + '%';
+        });
+        ttsVolumeSlider.addEventListener('change', (e) => {
+            ttsSettings.volume = Number(e.target.value);
+            saveTtsSettings();
+
+            if (ttsSettings.enabled) {
+                cancelCurrentSpeech(true);
+                scheduleTtsSync();
+            }
+        });
+
+        ttsControlPanel.querySelector('#close-tts-panel').addEventListener('click', () => {
+            ttsControlPanel.style.display = 'none';
+        });
+    }
+
     // 显示/隐藏控制面板
     function showControlPanel(show) {
         if (!controlPanel) setupControlPanel();
@@ -1084,6 +1187,37 @@
                     controlPanel.style.transform = 'translate(-50%, -50%)';
                 }
             }
+        }
+    }
+
+    function showTtsControlPanel(show) {
+        if (!ttsControlPanel) setupTtsControlPanel();
+        if (!ttsControlPanel) {
+            return;
+        }
+
+        ttsControlPanel.style.display = show ? 'block' : 'none';
+        if (!show) {
+            return;
+        }
+
+        const anchor = ttsSettingsButton || ttsToggleButton || settingsButton;
+        if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            ttsControlPanel.style.left = `${Math.max(rect.left, 12)}px`;
+            ttsControlPanel.style.top = `${rect.bottom + 10}px`;
+            ttsControlPanel.style.right = 'auto';
+            ttsControlPanel.style.transform = 'none';
+        } else {
+            ttsControlPanel.style.left = '50%';
+            ttsControlPanel.style.top = '50%';
+            ttsControlPanel.style.transform = 'translate(-50%, -50%)';
+        }
+
+        const voiceSelect = ttsControlPanel.querySelector('#tts-voice-select');
+        if (voiceSelect) {
+            ttsVoiceSelect = voiceSelect;
+            populateTtsVoiceSelect();
         }
     }
 
@@ -1138,26 +1272,29 @@
 
         ttsToggleButton = ttsBtn;
 
-        let voiceSelect = container.querySelector('.subtitle-tts-voice-select');
-        if (!voiceSelect) {
-            voiceSelect = document.createElement('select');
-            voiceSelect.className = 'subtitle-tts-voice-select';
+        let ttsSettingsBtn = container.querySelector('.subtitle-tts-settings-btn');
+        if (!ttsSettingsBtn) {
+            ttsSettingsBtn = document.createElement('button');
+            ttsSettingsBtn.type = 'button';
+            ttsSettingsBtn.className = 'el-button el-button--small subtitle-tts-settings-btn';
+            ttsSettingsBtn.innerHTML = '<i class="el-icon-s-tools"></i><span>配音设置</span>';
 
-            voiceSelect.addEventListener('change', () => {
-                ttsSettings.voice = voiceSelect.value;
-                saveTtsSettings();
-
-                if (ttsSettings.enabled) {
-                    cancelCurrentSpeech(true);
-                    scheduleTtsSync();
-                }
+            ttsSettingsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showTtsControlPanel(true);
             });
 
-            container.appendChild(voiceSelect);
+            container.appendChild(ttsSettingsBtn);
         }
 
-        ttsVoiceSelect = voiceSelect;
-        populateTtsVoiceSelect();
+        ttsSettingsButton = ttsSettingsBtn;
+        setupTtsControlPanel();
+        const panelVoiceSelect = ttsControlPanel ? ttsControlPanel.querySelector('#tts-voice-select') : null;
+        if (panelVoiceSelect) {
+            ttsVoiceSelect = panelVoiceSelect;
+            populateTtsVoiceSelect();
+        }
         updateTtsButtonState();
 
         if (ttsSettings.enabled && !ttsPreparing && (!ttsBoundVideo || ttsBoundVideo !== getVideoElement() || !ttsCues.length)) {
@@ -1302,6 +1439,10 @@
                     controlPanel.style.display = 'none';
                 }
 
+                if (ttsControlPanel) {
+                    ttsControlPanel.style.display = 'none';
+                }
+
                 // 停止观察器
                 if (observer) {
                     observer.disconnect();
@@ -1322,7 +1463,8 @@
         }
 
         .subtitle-settings-btn,
-        .subtitle-tts-btn {
+        .subtitle-tts-btn,
+        .subtitle-tts-settings-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
