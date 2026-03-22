@@ -2,7 +2,7 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.0.2
+// @version       4.0.3
 // @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
 // @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
 // @author        sangyuxiaowu
@@ -12,8 +12,8 @@
 // @homepage      https://github.com/sangyuxiaowu/luminaedu-video-subtitle
 // @homepageURL   https://github.com/sangyuxiaowu/luminaedu-video-subtitle
 // @supportURL    https://github.com/sangyuxiaowu/luminaedu-video-subtitle/issues
-// @updateURL     https://raw.githubusercontent.com/sangyuxiaowu/luminaedu-video-subtitle/main/luminaedu-video-subtitle.user.js
-// @downloadURL   https://raw.githubusercontent.com/sangyuxiaowu/luminaedu-video-subtitle/main/luminaedu-video-subtitle.user.js
+// @updateURL     https://raw.githubusercontent.com/sangyuxiaowu/luminaedu-video-subtitle/main/luminaedu-subtitle-customizer.user.js
+// @downloadURL   https://raw.githubusercontent.com/sangyuxiaowu/luminaedu-video-subtitle/main/luminaedu-subtitle-customizer.user.js
 // @grant         GM_addStyle
 // @grant         GM_getValue
 // @grant         GM_setValue
@@ -48,6 +48,9 @@
     let panelShownForFirstVisit = false;
     let scriptInitialized = false;
     let lastProcessedUrl = '';
+    let lastIsCoursePage = false;
+
+    const BUTTON_CONTAINER_ID = 'subtitle-settings-button-container';
 
     // 检查是否是课程页面
     function isCoursePage() {
@@ -66,6 +69,7 @@
         if (scriptInitialized) return;
 
         loadSettings();
+        cleanupStyles();
 
         // 检查是否是第一次使用
         const firstUse = GM_getValue('firstUse', true);
@@ -78,6 +82,7 @@
 
         // 记录当前URL
         lastProcessedUrl = window.location.href;
+        lastIsCoursePage = isCoursePage();
 
         // 如果是课程页面，初始化功能
         if (isCoursePage()) {
@@ -142,6 +147,48 @@
         }
     }
 
+    function cleanupStyles() {
+        const oldStyle = document.getElementById('custom-subtitle-style');
+        if (oldStyle) {
+            oldStyle.remove();
+        }
+    }
+
+    function parseBackgroundColor(color) {
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
+
+        if (!match) {
+            return {
+                hex: '#080808',
+                opacity: 0.75
+            };
+        }
+
+        const [, r, g, b, alpha = '1'] = match;
+
+        return {
+            hex: `#${Number(r).toString(16).padStart(2, '0')}${Number(g).toString(16).padStart(2, '0')}${Number(b).toString(16).padStart(2, '0')}`,
+            opacity: Number.parseFloat(alpha)
+        };
+    }
+
+    function getButtonAnchor() {
+        return document.querySelector('.video-place_div, #video-place_div') ||
+               document.querySelector('.video-place');
+    }
+
+    function getButtonContainer() {
+        let container = document.getElementById(BUTTON_CONTAINER_ID);
+
+        if (!container) {
+            container = document.createElement('div');
+            container.id = BUTTON_CONTAINER_ID;
+            container.className = 'subtitle-settings-button-container';
+        }
+
+        return container;
+    }
+
     // 保存设置
     function saveSettings() {
         GM_setValue('subtitleSettings', settings);
@@ -149,11 +196,8 @@
 
     // 应用字幕样式
     function applyStyles() {
+        cleanupStyles();
         if (!settings.enabled) return;
-
-        // 移除旧的样式
-        const oldStyle = document.getElementById('custom-subtitle-style');
-        if (oldStyle) oldStyle.remove();
 
         // 创建新样式
         const style = document.createElement('style');
@@ -226,11 +270,11 @@
 
             <div class="control-group" style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-size: 13px;">背景颜色</label>
-                <input type="color" id="bg-color-picker" value="${settings.backgroundColor.split(')')[0] + ')'}" style="width: 100%; height: 30px;">
+                <input type="color" id="bg-color-picker" value="${parseBackgroundColor(settings.backgroundColor).hex}" style="width: 100%; height: 30px;">
                 <div style="margin-top: 5px; display: flex; align-items: center;">
                     <span style="font-size: 12px; margin-right: 10px;">透明度:</span>
-                    <input type="range" id="bg-opacity-slider" min="0" max="1" step="0.05" value="0.75" style="width: 100%;">
-                    <span id="opacity-value" style="margin-left: 10px; font-size: 12px; width: 30px;">75%</span>
+                    <input type="range" id="bg-opacity-slider" min="0" max="1" step="0.05" value="${parseBackgroundColor(settings.backgroundColor).opacity}" style="width: 100%;">
+                    <span id="opacity-value" style="margin-left: 10px; font-size: 12px; width: 30px;">${Math.round(parseBackgroundColor(settings.backgroundColor).opacity * 100)}%</span>
                 </div>
             </div>
 
@@ -295,13 +339,10 @@
         const opacityValue = controlPanel.querySelector('#opacity-value');
 
         // 解析当前背景色
-        const bgColorMatch = settings.backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-        if (bgColorMatch) {
-            const [_, r, g, b, a = 0.75] = bgColorMatch;
-            bgColorPicker.value = `#${parseInt(r).toString(16).padStart(2, '0')}${parseInt(g).toString(16).padStart(2, '0')}${parseInt(b).toString(16).padStart(2, '0')}`;
-            bgOpacitySlider.value = a;
-            opacityValue.textContent = Math.round(a * 100) + '%';
-        }
+        const parsedBackground = parseBackgroundColor(settings.backgroundColor);
+        bgColorPicker.value = parsedBackground.hex;
+        bgOpacitySlider.value = String(parsedBackground.opacity);
+        opacityValue.textContent = Math.round(parsedBackground.opacity * 100) + '%';
 
         bgOpacitySlider.addEventListener('input', (e) => {
             opacityValue.textContent = Math.round(e.target.value * 100) + '%';
@@ -355,6 +396,7 @@
         // 应用按钮
         controlPanel.querySelector('#apply-btn').addEventListener('click', () => {
             applyStyles();
+            showControlPanel(false);
         });
 
         // 拖拽功能
@@ -399,8 +441,10 @@
             controlPanel.style.display = show ? 'block' : 'none';
 
             if (show) {
+                controlPanel.style.transform = 'none';
+
                 // 定位在视频中间
-                const videoPlace = document.querySelector('.video-place');
+                const videoPlace = document.querySelector('.video-place') || document.querySelector('.video-place_div, #video-place_div');
                 if (videoPlace) {
                     const rect = videoPlace.getBoundingClientRect();
                     const panelWidth = 300;
@@ -424,42 +468,32 @@
         // 如果不是课程页面，直接返回
         if (!isCoursePage()) return false;
 
-        // 移除现有的按钮
-        if (settingsButton && settingsButton.parentNode) {
-            settingsButton.parentNode.removeChild(settingsButton);
-            settingsButton = null;
-        }
-
-        // 查找下载按钮
-        const downloadButton = document.querySelector('.module_tabs .el-button.float_right.el-button--primary.el-button--small');
-        if (!downloadButton) {
-            console.log('未找到下载按钮');
+        const anchor = getButtonAnchor();
+        if (!anchor || !anchor.parentNode) {
+            console.log('未找到按钮挂载目标');
             return false;
         }
 
-        // 检查是否已有设置按钮
-        const existingSettingsBtn = downloadButton.previousElementSibling;
-        if (existingSettingsBtn && existingSettingsBtn.classList &&
-            existingSettingsBtn.classList.contains('subtitle-settings-btn')) {
-            settingsButton = existingSettingsBtn;
-            return true;
+        const container = getButtonContainer();
+        if (anchor.nextElementSibling !== container) {
+            anchor.insertAdjacentElement('afterend', container);
         }
 
-        // 创建设置按钮
-        const settingsBtn = document.createElement('button');
-        settingsBtn.type = 'button';
-        settingsBtn.className = 'el-button float_right el-button--primary el-button--small subtitle-settings-btn';
-        settingsBtn.style.cssText = 'margin-right: 10px !important;';
-        settingsBtn.innerHTML = '<i class="el-icon-setting"></i><span>字幕设置</span>';
+        let settingsBtn = container.querySelector('.subtitle-settings-btn');
+        if (!settingsBtn) {
+            settingsBtn = document.createElement('button');
+            settingsBtn.type = 'button';
+            settingsBtn.className = 'el-button el-button--primary el-button--small subtitle-settings-btn';
+            settingsBtn.innerHTML = '<i class="el-icon-setting"></i><span>字幕设置</span>';
 
-        settingsBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            showControlPanel(true);
-        });
+            settingsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showControlPanel(true);
+            });
 
-        // 插入到下载按钮前
-        downloadButton.parentNode.insertBefore(settingsBtn, downloadButton);
+            container.appendChild(settingsBtn);
+        }
         settingsButton = settingsBtn;
 
         return true;
@@ -491,11 +525,13 @@
                                 shouldUpdate = true;
                             }
 
-                            // 检查是否添加了module_tabs或下载按钮
+                            // 检查是否添加了按钮挂载目标
                             if (node.classList && (
                                 node.classList.contains('module_tabs') ||
+                                node.classList.contains('video-place_div') ||
+                                node.classList.contains('video-place') ||
                                 node.querySelector('.module_tabs') ||
-                                (node.querySelector && node.querySelector('.el-button.float_right.el-button--primary.el-button--small'))
+                                node.querySelector('.video-place_div, #video-place_div, .video-place')
                             )) {
                                 shouldAddButton = true;
                             }
@@ -507,6 +543,8 @@
                 if (mutation.type === 'attributes') {
                     if (mutation.target.classList &&
                         (mutation.target.classList.contains('module_tabs') ||
+                         mutation.target.classList.contains('video-place_div') ||
+                         mutation.target.classList.contains('video-place') ||
                          mutation.target.classList.contains('el-button'))) {
                         shouldAddButton = true;
                     }
@@ -562,10 +600,14 @@
     // 处理SPA导航
     function handleSPANavigation() {
         const currentUrl = window.location.href;
-        const wasCoursePage = isCoursePage();
+        const isCurrentCoursePage = isCoursePage();
+        const wasCoursePage = lastIsCoursePage;
+
+        lastProcessedUrl = currentUrl;
+        lastIsCoursePage = isCurrentCoursePage;
 
         // 如果URL变化了但页面类型没变（比如刷新或视频切换）
-        if (isCoursePage()) {
+        if (isCurrentCoursePage) {
             console.log('检测到课程页面导航');
 
             // 如果是刷新页面或切换视频，重新初始化
@@ -595,8 +637,17 @@
 
     // 添加全局样式
     GM_addStyle(`
+        .subtitle-settings-button-container {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: 12px;
+            width: 100%;
+        }
+
         .subtitle-settings-btn {
-            margin-right: 10px !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         #subtitle-control-panel input[type="range"] {
