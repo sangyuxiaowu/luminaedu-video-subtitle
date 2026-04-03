@@ -2,9 +2,9 @@
 // @name          LuminaEdu Video Subtitle Customizer
 // @name:zh-CN    LuminaEdu 视频字幕自定义工具
 // @namespace     https://github.com/sangyuxiaowu/luminaedu-video-subtitle
-// @version       4.3.0
-// @description   Customize LuminaEdu video subtitle styles (font size, color, background, etc.)
-// @description:zh-CN 自定义LuminaEdu视频字幕的字体大小、颜色、背景等样式
+// @version       4.4.0
+// @description   Customize LuminaEdu video subtitle styles and download subtitles on LuminaEdu.
+// @description:zh-CN 自定义 LuminaEdu 视频字幕的样式，并支持下载中英文字幕文本
 // @author        sangyuxiaowu
 // @match         https://www.luminaedu.com/*
 // @icon          https://www.luminaedu.com/lib/images/favicon.ico
@@ -52,6 +52,7 @@
     let ttsControlPanel = null;
     let aboutButton = null;
     let settingsButton = null;
+    let subtitleDownloadButton = null;
     let ttsSettingsButton = null;
     let observer = null;
     let aboutPanelInitialized = false;
@@ -82,6 +83,7 @@
     let ttsCurrentCueWindowEnd = -1;
     let ttsStatusText = '未开启';
     let ttsStatusTone = 'idle';
+    let subtitleDownloadInProgress = false;
 
     const BUTTON_CONTAINER_ID = 'subtitle-settings-button-container';
     const DEFAULT_SPEECH_RATE = 1;
@@ -274,7 +276,9 @@
                     return null;
                 }
 
-                const text = lines.slice(timelineIndex + 1).join(' ').trim();
+                const textLines = lines.slice(timelineIndex + 1).map((line) => line.trim()).filter(Boolean);
+                const rawText = textLines.join('\n').trim();
+                const text = textLines.join(' ').trim();
                 if (!text) {
                     return null;
                 }
@@ -290,19 +294,33 @@
                     start,
                     end,
                     duration: end - start,
+                    rawText,
                     text
                 };
             })
             .filter(Boolean);
     }
 
-    async function ensureChineseSubtitleSelected() {
+    function isEnglishSubtitleLabel(text) {
+        return /英文|英语|english/i.test(text || '');
+    }
+
+    function normalizeSubtitleLanguageLabel(text) {
+        return (text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
+    function getVisibleSubtitleLanguageOptions() {
+        return Array.from(document.querySelectorAll('.el-select-dropdown__item, [role="option"], .el-scrollbar__view li'))
+            .filter((option) => option.offsetParent !== null);
+    }
+
+    async function ensureSubtitleLanguageSelected(matcher) {
         const input = getSubtitleLanguageInput();
         if (!input) {
             return true;
         }
 
-        if (isChineseSubtitleLabel(input.value)) {
+        if (matcher(input.value)) {
             return true;
         }
 
@@ -310,21 +328,28 @@
         input.click();
         await delay(200);
 
-        const options = Array.from(document.querySelectorAll('.el-select-dropdown__item, [role="option"], .el-scrollbar__view li'));
-        const chineseOption = options.find((option) => {
+        const options = getVisibleSubtitleLanguageOptions();
+        const matchedOption = options.find((option) => {
             const text = option.textContent || '';
-            const visible = option.offsetParent !== null;
-            return visible && isChineseSubtitleLabel(text);
+            return matcher(text);
         });
 
-        if (chineseOption) {
-            chineseOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-            chineseOption.click();
-            await waitFor(() => isChineseSubtitleLabel(getSubtitleLanguageInput()?.value || ''), 2500, 120);
-            return isChineseSubtitleLabel(getSubtitleLanguageInput()?.value || '');
+        if (matchedOption) {
+            matchedOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            matchedOption.click();
+            await waitFor(() => matcher(getSubtitleLanguageInput()?.value || ''), 2500, 120);
+            return matcher(getSubtitleLanguageInput()?.value || '');
         }
 
         return false;
+    }
+
+    async function ensureChineseSubtitleSelected() {
+        return ensureSubtitleLanguageSelected(isChineseSubtitleLabel);
+    }
+
+    async function ensureEnglishSubtitleSelected() {
+        return ensureSubtitleLanguageSelected(isEnglishSubtitleLabel);
     }
 
     // 保存设置
@@ -374,6 +399,131 @@
 
     function getSubtitleTextarea() {
         return document.querySelector('#pane-subtitle textarea');
+    }
+
+    function getCourseTitleElement() {
+        return document.querySelector('.nav-switch--title');
+    }
+
+    function getCourseTitleText() {
+        return getCourseTitleElement()?.textContent?.trim() || '';
+    }
+
+    function extractLessonCode(titleText) {
+        const match = (titleText || '').match(/^(\d+(?:\.\d+)*)/);
+        return match ? match[1] : '';
+    }
+
+    function getSubtitleFileBaseName() {
+        const lessonCode = extractLessonCode(getCourseTitleText());
+        return lessonCode ? lessonCode.replace(/\./g, '-') : '';
+    }
+
+    function buildCleanSubtitleText(content) {
+        return parseSubtitleContent(content)
+            .map((cue) => cue.rawText)
+            .filter(Boolean)
+            .join('\n')
+            .trim();
+    }
+
+    function downloadTextFile(fileName, content) {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 1000);
+    }
+
+    function setSubtitleDownloadButtonState(isLoading) {
+        if (!subtitleDownloadButton) {
+            return;
+        }
+
+        subtitleDownloadButton.disabled = isLoading;
+        subtitleDownloadButton.classList.toggle('is-loading', isLoading);
+        subtitleDownloadButton.querySelector('span').textContent = isLoading ? '下载中' : '下载字幕';
+    }
+
+    async function restoreSubtitleLanguage(labelText) {
+        const normalizedLabel = normalizeSubtitleLanguageLabel(labelText);
+        if (!normalizedLabel) {
+            return;
+        }
+
+        await ensureSubtitleLanguageSelected((text) => normalizeSubtitleLanguageLabel(text) === normalizedLabel);
+    }
+
+    async function readSubtitleContentForLanguage(languageMatcher, languageName) {
+        const currentLanguageLabel = getSubtitleLanguageInput()?.value || '';
+        const previousSubtitleContent = getSubtitleTextarea()?.value?.replace(/\r/g, '') || '';
+        const alreadySelected = languageMatcher(currentLanguageLabel);
+        const switched = alreadySelected ? true : await ensureSubtitleLanguageSelected(languageMatcher);
+        if (!switched) {
+            throw new Error(`未找到${languageName}字幕选项`);
+        }
+
+        const ready = await waitFor(() => {
+            const input = getSubtitleLanguageInput();
+            const textarea = getSubtitleTextarea();
+            const currentContent = textarea?.value?.replace(/\r/g, '') || '';
+
+            if (!textarea || !currentContent.trim() || !languageMatcher(input?.value || '')) {
+                return false;
+            }
+
+            return alreadySelected || currentContent !== previousSubtitleContent;
+        }, 3000, 120);
+
+        const subtitleContent = getSubtitleTextarea()?.value?.replace(/\r/g, '') || '';
+        if (!subtitleContent.trim() || (!alreadySelected && !ready && subtitleContent === previousSubtitleContent)) {
+            throw new Error(`未读取到${languageName}字幕内容`);
+        }
+
+        return subtitleContent;
+    }
+
+    async function downloadSubtitles() {
+        if (subtitleDownloadInProgress) {
+            return;
+        }
+
+        subtitleDownloadInProgress = true;
+        setSubtitleDownloadButtonState(true);
+
+        const originalLanguageLabel = getSubtitleLanguageInput()?.value || '';
+
+        try {
+            const fileBaseName = getSubtitleFileBaseName();
+            if (!fileBaseName) {
+                throw new Error('未能从课程标题中提取编号，请确认标题以章节号开头');
+            }
+
+            const englishSubtitle = await readSubtitleContentForLanguage(isEnglishSubtitleLabel, '英文');
+            const chineseSubtitle = await readSubtitleContentForLanguage(isChineseSubtitleLabel, '中文');
+            const englishCleaned = buildCleanSubtitleText(englishSubtitle);
+            const chineseCleaned = buildCleanSubtitleText(chineseSubtitle);
+
+            downloadTextFile(`${fileBaseName}e.txt`, englishSubtitle);
+            downloadTextFile(`${fileBaseName}e_cleaned.txt`, englishCleaned);
+            downloadTextFile(`${fileBaseName}.txt`, chineseSubtitle);
+            downloadTextFile(`${fileBaseName}_cleaned.txt`, chineseCleaned);
+        } catch (error) {
+            console.error('下载字幕失败', error);
+            window.alert(`下载字幕失败：${error.message}`);
+        } finally {
+            await restoreSubtitleLanguage(originalLanguageLabel);
+            subtitleDownloadInProgress = false;
+            setSubtitleDownloadButtonState(false);
+        }
     }
 
     function getVideoElement() {
@@ -1086,7 +1236,7 @@
             <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px; line-height: 1.6;">
                 <div><strong>插件名称：</strong>LuminaEdu Video Subtitle Customizer</div>
                 <div><strong>作者：</strong>桑榆肖物</div>
-                <div><strong>版本：</strong>4.3.0</div>
+                <div><strong>版本：</strong>4.4.0</div>
                 <div><strong>GitHub：</strong><a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">${REPO_URL}</a></div>
                 <div><strong>问题反馈：</strong><a href="${ISSUES_URL}" target="_blank" rel="noopener noreferrer">${ISSUES_URL}</a></div>
             </div>
@@ -1489,6 +1639,23 @@
         }
         settingsButton = settingsBtn;
 
+        let downloadBtn = container.querySelector('.subtitle-download-btn');
+        if (!downloadBtn) {
+            downloadBtn = document.createElement('button');
+            downloadBtn.type = 'button';
+            downloadBtn.className = 'el-button el-button--success el-button--small subtitle-download-btn';
+            downloadBtn.innerHTML = '<i class="el-icon-download"></i><span>下载字幕</span>';
+
+            downloadBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                downloadSubtitles();
+            });
+
+            container.appendChild(downloadBtn);
+        }
+        subtitleDownloadButton = downloadBtn;
+
         let ttsBtn = container.querySelector('.subtitle-tts-btn');
         if (!ttsBtn) {
             ttsBtn = document.createElement('button');
@@ -1536,7 +1703,9 @@
         ttsStatusLabel = ttsStatus;
         setTtsStatus(ttsStatusText, ttsStatusTone);
 
-        const desiredOrder = [aboutBtn, settingsBtn, ttsBtn, ttsSettingsBtn, ttsStatus];
+        setSubtitleDownloadButtonState(subtitleDownloadInProgress);
+
+        const desiredOrder = [aboutBtn, settingsBtn, downloadBtn, ttsBtn, ttsSettingsBtn, ttsStatus];
         desiredOrder.forEach((element) => {
             if (element && element.parentNode === container) {
                 container.appendChild(element);
@@ -1722,11 +1891,17 @@
 
         .subtitle-about-btn,
         .subtitle-settings-btn,
+        .subtitle-download-btn,
         .subtitle-tts-btn,
         .subtitle-tts-settings-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
+        }
+
+        .subtitle-download-btn.is-loading {
+            opacity: 0.75;
+            cursor: wait;
         }
 
         #subtitle-about-panel a {
